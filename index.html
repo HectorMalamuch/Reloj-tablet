@@ -11,6 +11,41 @@
     font-family: Arial, Helvetica, sans-serif;
     display:flex; align-items:center; justify-content:center;
   }
+  #photo {
+    position:fixed; inset:0;
+    background-size:cover; background-position:center;
+    opacity:0;
+    transition:opacity 1.8s ease-in-out;
+    z-index:0;
+  }
+  #shade {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.32);
+    opacity:0;
+    transition:opacity 1.2s ease;
+    z-index:1;
+  }
+  body.photo-mode #photo { opacity:1; }
+  body.photo-mode #shade { opacity:1; }
+  body.photo-mode .screen {
+    justify-content:flex-start;
+    align-items:flex-start;
+    padding:30px 42px;
+    text-shadow:0 2px 8px rgba(0,0,0,.9);
+  }
+  body.photo-mode #date { font-size:27px; margin-bottom:3px; }
+  body.photo-mode #time { font-size:92px; letter-spacing:-.04em; }
+  body.photo-mode .weather { margin-top:16px; gap:24px; }
+  body.photo-mode #icon { font-size:52px; }
+  body.photo-mode .weather-data { gap:24px; }
+  body.photo-mode .metric { min-width:95px; }
+  body.photo-mode .value { font-size:38px; }
+  body.photo-mode .label { font-size:15px; }
+  body.photo-mode #condition { margin-top:10px; font-size:18px; }
+  .cold { color:#55b8ff; }
+  .mild { color:#ffd84d; }
+  .warm { color:#ff9b3d; }
+  #icon { filter: saturate(1.35); }
   .screen {
     width:100vw; height:100vh;
     min-width:100%; min-height:100%;
@@ -80,7 +115,9 @@
 </style>
 </head>
 <body>
-<main class="screen">
+<div id="photo"></div>
+<div id="shade"></div>
+<main class="screen" style="position:relative;z-index:2;">
   <div id="date">Cargando fecha…</div>
   <div id="time"><span id="hm">--:--</span><span id="seconds">:--</span></div>
 
@@ -161,6 +198,47 @@
     return { icon: "🌡️", text: "Estado del tiempo" };
   }
 
+
+  function tempClass(value) {
+    value = Number(value);
+    if (value < 10) return "cold";
+    if (value <= 20) return "mild";
+    return "warm";
+  }
+
+  // PORTARRETRATOS:
+  // Subí tus fotos al repo dentro de una carpeta llamada "fotos"
+  // y agregá aquí sus nombres. Ejemplo: "fotos/vacaciones.jpg".
+  var PHOTOS = [
+    // "fotos/foto1.jpg",
+    // "fotos/foto2.jpg",
+    // "fotos/foto3.jpg"
+  ];
+  var PHOTO_START_HOUR = 8;
+  var PHOTO_END_HOUR = 22;
+  var PHOTO_CHANGE_MS = 60000;
+  var photoIndex = 0;
+
+  function buenosAiresHour() {
+    return Number(new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ, hour: "2-digit", hourCycle: "h23"
+    }).format(new Date()));
+  }
+
+  function updateMode() {
+    var h = buenosAiresHour();
+    var active = PHOTOS.length > 0 && h >= PHOTO_START_HOUR && h < PHOTO_END_HOUR;
+    document.body.classList.toggle("photo-mode", active);
+    if (active && !document.getElementById("photo").style.backgroundImage) showNextPhoto();
+  }
+
+  function showNextPhoto() {
+    if (!PHOTOS.length) return;
+    var photo = document.getElementById("photo");
+    photo.style.backgroundImage = 'url("' + PHOTOS[photoIndex] + '")';
+    photoIndex = (photoIndex + 1) % PHOTOS.length;
+  }
+
   async function updateWeather() {
     var status = document.getElementById("status");
     try {
@@ -179,8 +257,12 @@
       var w = data.current;
       var info = weatherInfo(Number(w.weather_code), Number(w.is_day) === 1);
 
-      document.getElementById("temp").textContent = Math.round(w.temperature_2m) + "°";
-      document.getElementById("feels").textContent = Math.round(w.apparent_temperature) + "°";
+      var tempEl = document.getElementById("temp");
+      var feelsEl = document.getElementById("feels");
+      tempEl.textContent = Math.round(w.temperature_2m) + "°";
+      feelsEl.textContent = Math.round(w.apparent_temperature) + "°";
+      tempEl.className = "value " + tempClass(w.temperature_2m);
+      feelsEl.className = "value " + tempClass(w.apparent_temperature);
       document.getElementById("humidity").textContent = Math.round(w.relative_humidity_2m) + "%";
       document.getElementById("icon").textContent = info.icon;
       document.getElementById("condition").textContent = info.text;
@@ -195,6 +277,12 @@
 
   updateWeather();
   setInterval(updateWeather, 10 * 60 * 1000);
+
+  updateMode();
+  setInterval(updateMode, 60 * 1000);
+  setInterval(function () {
+    if (document.body.classList.contains("photo-mode")) showNextPhoto();
+  }, PHOTO_CHANGE_MS);
 })();
 </script>
 </body>
