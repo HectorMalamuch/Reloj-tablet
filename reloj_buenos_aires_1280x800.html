@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Reloj Buenos Aires</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#050608; color:#f5f5f5; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .screen {
+    width:100vw; height:100vh;
+    min-width:100%; min-height:100%;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    padding:30px 48px 24px;
+  }
+  #date {
+    font-size:42px;
+    font-weight:400;
+    opacity:.78;
+    text-transform:capitalize;
+    margin-bottom:1vh;
+  }
+  #time {
+    font-size:218px;
+    line-height:.95;
+    font-weight:300;
+    letter-spacing:-.045em;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+  #seconds { opacity:.58; }
+  .weather {
+    margin-top:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:52px;
+  }
+  #icon {
+    font-size:92px;
+    line-height:1;
+  }
+  .weather-data {
+    display:flex;
+    align-items:center;
+    gap:46px;
+  }
+  .metric { text-align:center; min-width:140px; }
+  .value {
+    font-size:62px;
+    font-weight:400;
+    white-space:nowrap;
+  }
+  .label {
+    margin-top:.4vh;
+    font-size:21px;
+    opacity:.58;
+  }
+  #condition {
+    margin-top:2.2vh;
+    font-size:25px;
+    opacity:.72;
+  }
+  #status {
+    position:fixed; right:18px; bottom:12px;
+    font-size:13px; opacity:.32;
+  }
+
+  @media (max-width: 1000px) {
+    #time { font-size:17vw; }
+    #date { font-size:3.3vw; }
+    .value { font-size:5vw; }
+    #icon { font-size:7.3vw; }
+  }
+</style>
+</head>
+<body>
+<main class="screen">
+  <div id="date">Cargando fecha…</div>
+  <div id="time"><span id="hm">--:--</span><span id="seconds">:--</span></div>
+
+  <section class="weather">
+    <div id="icon">◌</div>
+    <div class="weather-data">
+      <div class="metric">
+        <div class="value" id="temp">--°</div>
+        <div class="label">Buenos Aires</div>
+      </div>
+      <div class="metric">
+        <div class="value" id="feels">--°</div>
+        <div class="label">Sensación</div>
+      </div>
+      <div class="metric">
+        <div class="value" id="humidity">--%</div>
+        <div class="label">Humedad</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="condition">Actualizando clima…</div>
+  <div id="status"></div>
+</main>
+
+<script>
+(function () {
+  var TZ = "America/Argentina/Buenos_Aires";
+  var LAT = -34.6037;
+  var LON = -58.3816;
+
+  function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
+
+  function updateClock() {
+    var now = new Date();
+
+    var dateText = new Intl.DateTimeFormat("es-AR", {
+      timeZone: TZ,
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }).format(now);
+
+    var parts = new Intl.DateTimeFormat("es-AR", {
+      timeZone: TZ,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(now);
+
+    var vals = {};
+    parts.forEach(function(p) { vals[p.type] = p.value; });
+
+    document.getElementById("date").textContent = capitalize(dateText);
+    document.getElementById("hm").textContent = vals.hour + ":" + vals.minute;
+    document.getElementById("seconds").textContent = ":" + vals.second;
+  }
+
+  function weatherInfo(code, isDay) {
+    if (code === 0) return { icon: isDay ? "☀️" : "🌙", text: "Despejado" };
+    if (code === 1) return { icon: isDay ? "🌤️" : "🌙", text: "Mayormente despejado" };
+    if (code === 2) return { icon: "⛅", text: "Parcialmente nublado" };
+    if (code === 3) return { icon: "☁️", text: "Nublado" };
+    if (code === 45 || code === 48) return { icon: "🌫️", text: "Niebla" };
+    if (code === 51 || code === 53 || code === 55) return { icon: "🌦️", text: "Llovizna" };
+    if (code === 56 || code === 57) return { icon: "🌧️", text: "Llovizna helada" };
+    if (code === 61 || code === 63 || code === 65) return { icon: "🌧️", text: "Lluvia" };
+    if (code === 66 || code === 67) return { icon: "🌧️", text: "Lluvia helada" };
+    if (code === 71 || code === 73 || code === 75 || code === 77) return { icon: "🌨️", text: "Nieve" };
+    if (code === 80 || code === 81 || code === 82) return { icon: "🌦️", text: "Chaparrones" };
+    if (code === 85 || code === 86) return { icon: "🌨️", text: "Chaparrones de nieve" };
+    if (code === 95) return { icon: "⛈️", text: "Tormenta" };
+    if (code === 96 || code === 99) return { icon: "⛈️", text: "Tormenta con granizo" };
+    return { icon: "🌡️", text: "Estado del tiempo" };
+  }
+
+  async function updateWeather() {
+    var status = document.getElementById("status");
+    try {
+      var url =
+        "https://api.open-meteo.com/v1/forecast" +
+        "?latitude=" + LAT +
+        "&longitude=" + LON +
+        "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day" +
+        "&temperature_unit=celsius" +
+        "&timezone=America%2FArgentina%2FBuenos_Aires";
+
+      var res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+
+      var data = await res.json();
+      var w = data.current;
+      var info = weatherInfo(Number(w.weather_code), Number(w.is_day) === 1);
+
+      document.getElementById("temp").textContent = Math.round(w.temperature_2m) + "°";
+      document.getElementById("feels").textContent = Math.round(w.apparent_temperature) + "°";
+      document.getElementById("humidity").textContent = Math.round(w.relative_humidity_2m) + "%";
+      document.getElementById("icon").textContent = info.icon;
+      document.getElementById("condition").textContent = info.text;
+      status.textContent = "";
+    } catch (e) {
+      status.textContent = "Sin conexión · reintentando";
+    }
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  updateWeather();
+  setInterval(updateWeather, 10 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
