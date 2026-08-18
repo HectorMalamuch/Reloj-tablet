@@ -33,7 +33,13 @@
     padding:30px 42px;
     text-shadow:0 2px 8px rgba(0,0,0,.9);
   }
-  body.photo-mode #date { font-size:27px; margin-bottom:3px; }
+  body.photo-mode #calendar {
+    width:145px; margin-bottom:10px;
+    box-shadow:0 3px 10px rgba(0,0,0,.55);
+  }
+  body.photo-mode #cal-weekday { font-size:14px; padding:5px 4px 3px; }
+  body.photo-mode #cal-day { font-size:68px; padding:6px 2px 2px; }
+  body.photo-mode #cal-monthyear { font-size:11px; padding:3px 4px 6px; }
   body.photo-mode #time { font-size:92px; letter-spacing:-.04em; }
   body.photo-mode .weather { margin-top:16px; gap:24px; }
   body.photo-mode #icon { font-size:52px; }
@@ -53,13 +59,42 @@
     align-items:center; justify-content:center;
     padding:30px 48px 24px;
   }
-  #date {
-    font-size:42px;
-    font-weight:400;
-    opacity:.78;
-    text-transform:capitalize;
-    margin-bottom:1vh;
+  #date { display:none; }
+  #calendar {
+    width:250px;
+    background:#f7f3e8;
+    color:#111;
+    text-align:center;
+    border-radius:3px;
+    box-shadow:0 5px 16px rgba(0,0,0,.45);
+    overflow:hidden;
+    margin-bottom:20px;
+    font-family: Georgia, "Times New Roman", serif;
   }
+  #cal-weekday {
+    padding:9px 8px 5px;
+    font-size:24px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    border-bottom:1px solid #cfc9ba;
+  }
+  #cal-day {
+    font-size:122px;
+    line-height:.88;
+    font-weight:700;
+    padding:10px 4px 4px;
+    font-variant-numeric:tabular-nums;
+  }
+  #cal-monthyear {
+    padding:5px 8px 10px;
+    font-size:21px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  #calendar.red-day #cal-day { color:#c51616; }
+  #calendar.normal-day #cal-day { color:#111; }
   #time {
     font-size:218px;
     line-height:.95;
@@ -118,7 +153,12 @@
 <div id="photo"></div>
 <div id="shade"></div>
 <main class="screen" style="position:relative;z-index:2;">
-  <div id="date">Cargando fecha…</div>
+  <div id="date"></div>
+  <div id="calendar" class="normal-day">
+    <div id="cal-weekday">---</div>
+    <div id="cal-day">--</div>
+    <div id="cal-monthyear">---</div>
+  </div>
   <div id="time"><span id="hm">--:--</span><span id="seconds">:--</span></div>
 
   <section class="weather">
@@ -153,6 +193,63 @@
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   }
 
+  var holidayDates = {};
+  var holidayYearLoaded = null;
+
+  // Fallback para feriados nacionales de fecha fija si la consulta online falla.
+  var FIXED_HOLIDAYS = {
+    "01-01": true, "03-24": true, "04-02": true, "05-01": true,
+    "05-25": true, "06-20": true, "07-09": true, "12-08": true, "12-25": true
+  };
+
+  async function loadArgentinaHolidays(year) {
+    if (holidayYearLoaded === year) return;
+    try {
+      var r = await fetch("https://date.nager.at/api/v3/PublicHolidays/" + year + "/AR", {cache:"no-store"});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      var days = await r.json();
+      holidayDates = {};
+      days.forEach(function(h) { holidayDates[h.date] = h.localName || h.name; });
+      holidayYearLoaded = year;
+      updateCalendar();
+    } catch(e) {
+      holidayYearLoaded = year; // usa fallback de fechas fijas
+    }
+  }
+
+  function baDateParts() {
+    var parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: TZ, year:"numeric", month:"2-digit", day:"2-digit", weekday:"long"
+    }).formatToParts(new Date());
+    var v = {};
+    parts.forEach(function(p){ v[p.type] = p.value; });
+    return v;
+  }
+
+  function updateCalendar() {
+    var now = new Date();
+    var es = new Intl.DateTimeFormat("es-AR", {
+      timeZone: TZ, weekday:"long", day:"numeric", month:"long", year:"numeric"
+    }).formatToParts(now);
+    var v = {};
+    es.forEach(function(p){ v[p.type] = p.value; });
+
+    var en = baDateParts();
+    var iso = en.year + "-" + en.month + "-" + en.day;
+    var md = en.month + "-" + en.day;
+    var sunday = en.weekday === "Sunday";
+    var holiday = !!holidayDates[iso] || !!FIXED_HOLIDAYS[md];
+
+    document.getElementById("cal-weekday").textContent = v.weekday;
+    document.getElementById("cal-day").textContent = v.day;
+    document.getElementById("cal-monthyear").textContent = v.month + " " + v.year;
+
+    var cal = document.getElementById("calendar");
+    cal.className = (sunday || holiday) ? "red-day" : "normal-day";
+
+    loadArgentinaHolidays(Number(en.year));
+  }
+
   function updateClock() {
     var now = new Date();
 
@@ -175,7 +272,7 @@
     var vals = {};
     parts.forEach(function(p) { vals[p.type] = p.value; });
 
-    document.getElementById("date").textContent = capitalize(dateText);
+    updateCalendar();
     document.getElementById("hm").textContent = vals.hour + ":" + vals.minute;
     document.getElementById("seconds").textContent = ":" + vals.second;
   }
